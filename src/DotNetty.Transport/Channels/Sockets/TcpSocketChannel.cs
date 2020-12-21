@@ -126,6 +126,10 @@ namespace DotNetty.Transport.Channels.Sockets
                 var eventPayload = new SocketChannelAsyncOperation(this, false);
                 eventPayload.RemoteEndPoint = remoteAddress;
                 bool connected = !this.Socket.ConnectAsync(eventPayload);
+                if (connected)
+                {
+                    this.DoFinishConnect(eventPayload);
+                }
                 success = true;
                 return connected;
             }
@@ -166,9 +170,12 @@ namespace DotNetty.Transport.Channels.Sockets
         {
             try
             {
-                if (this.TryResetState(StateFlags.Open | StateFlags.Active))
+                if (this.TryResetState(StateFlags.Open))
                 {
-                    this.Socket.Shutdown(SocketShutdown.Both);
+                    if (this.TryResetState(StateFlags.Active))
+                    {
+                        this.Socket.Shutdown(SocketShutdown.Both);
+                    }
                     this.Socket.Dispose();
                 }
             }
@@ -306,15 +313,20 @@ namespace DotNetty.Transport.Channels.Sockets
 
                     if (writtenBytes > 0)
                     {
-                        // Release the fully written buffers, and update the indexes of the partially written buffer.
+                        // Release the fully written buffers, and update the indexes of the partially written buffer
                         input.RemoveBytes(writtenBytes);
                     }
 
                     if (!done)
                     {
-                        SocketChannelAsyncOperation asyncOperation = this.PrepareWriteOperation(bufferList);
+                        IList<ArraySegment<byte>> asyncBufferList = bufferList;
+                        if (object.ReferenceEquals(sharedBufferList, asyncBufferList))
+                        {
+                            asyncBufferList = sharedBufferList.ToArray(); // move out of shared list that will be reused which could corrupt buffers still pending update
+                        }
+                        SocketChannelAsyncOperation asyncOperation = this.PrepareWriteOperation(asyncBufferList);
 
-                        // Did not write all buffers completely.
+                        // Not all buffers were written out completely
                         if (this.IncompleteWrite(true, asyncOperation))
                         {
                             break;
@@ -324,13 +336,14 @@ namespace DotNetty.Transport.Channels.Sockets
             }
             finally
             {
+                // Prepare the list for reuse
                 sharedBufferList?.Clear();
             }
         }
 
         List<ArraySegment<byte>> AdjustBufferList(long localWrittenBytes, List<ArraySegment<byte>> bufferList)
         {
-            var adjustbufferList = new List<ArraySegment<byte>>(bufferList.Count);
+            var adjusted = new List<ArraySegment<byte>>(bufferList.Count);
             foreach (ArraySegment<byte> buffer in bufferList)
             {
                 if (localWrittenBytes > 0)
@@ -340,7 +353,7 @@ namespace DotNetty.Transport.Channels.Sockets
                     {
                         int offset = buffer.Offset + (int)localWrittenBytes;
                         int count = -(int)leftBytes;
-                        adjustbufferList.Add(new ArraySegment<byte>(buffer.Array, offset, count));
+                        adjusted.Add(new ArraySegment<byte>(buffer.Array, offset, count));
                         localWrittenBytes = 0;
                     }
                     else
@@ -350,11 +363,10 @@ namespace DotNetty.Transport.Channels.Sockets
                 }
                 else
                 {
-                    adjustbufferList.Add(buffer);
+                    adjusted.Add(buffer);
                 }
             }
-            bufferList = adjustbufferList;
-            return bufferList;
+            return adjusted;
         }
 
         protected override IChannelUnsafe NewUnsafe() => new TcpSocketChannelUnsafe(this);

@@ -4,6 +4,7 @@
 namespace DotNetty.Transport.Channels
 {
     using System;
+    using System.Collections.Generic;
     using System.Threading.Tasks;
     using DotNetty.Common.Concurrency;
     using DotNetty.Common.Internal;
@@ -63,10 +64,14 @@ namespace DotNetty.Transport.Channels
         {
         }
 
+        public new IEventLoop GetNext() => this;
+
         /// <inheritdoc />
         public Task RegisterAsync(IChannel channel) => channel.Unsafe.RegisterAsync(this);
 
         /// <inheritdoc />
         public new IEventLoopGroup Parent => (IEventLoopGroup)base.Parent;
+
+        public new IEnumerable<IEventLoop> Items => new[] { this };
     }
 }

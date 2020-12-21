@@ -110,13 +110,13 @@ namespace DotNetty.Buffers
 
         public override int ForEachByteDesc(int index, int length, IByteProcessor processor) => this.wrapped.ForEachByteDesc(index, length, processor);
 
-        public override int GetHashCode() => this.wrapped.GetHashCode();
+        public sealed override int GetHashCode() => this.wrapped.GetHashCode();
 
-        public override bool Equals(IByteBuffer buf) => this.wrapped.Equals(buf);
+        public sealed override bool Equals(IByteBuffer buf) => this.wrapped.Equals(buf);
 
-        public override int CompareTo(IByteBuffer that) => this.wrapped.CompareTo(that);
+        public sealed override int CompareTo(IByteBuffer that) => this.wrapped.CompareTo(that);
 
-        public override int ReferenceCount => this.wrapped.ReferenceCount;
+        public sealed override int ReferenceCount => this.wrapped.ReferenceCount;
 
         public override IByteBuffer Duplicate() => this.wrapped.Duplicate();
 
@@ -522,6 +522,12 @@ namespace DotNetty.Buffers
             return this;
         }
 
+        public override ICharSequence GetCharSequence(int index, int length, Encoding encoding) => this.wrapped.GetCharSequence(index, length, encoding);
+
+        public override ICharSequence ReadCharSequence(int length, Encoding encoding) => this.wrapped.ReadCharSequence(length, encoding);
+
+        public override int SetCharSequence(int index, ICharSequence sequence, Encoding encoding) => this.wrapped.SetCharSequence(index, sequence, encoding);
+
         public override string GetString(int index, int length, Encoding encoding) => this.wrapped.GetString(index, length, encoding);
 
         public override string ReadString(int length, Encoding encoding) => this.wrapped.ReadString(length, encoding);
@@ -529,6 +535,8 @@ namespace DotNetty.Buffers
         public override int SetString(int index, string value, Encoding encoding) => this.wrapped.SetString(index, value, encoding);
 
         public override IByteBuffer ReadBytes(Stream destination, int length) => this.wrapped.ReadBytes(destination, length);
+
+        public override int WriteCharSequence(ICharSequence sequence, Encoding encoding) => this.wrapped.WriteCharSequence(sequence, encoding);
 
         public override int WriteString(string value, Encoding encoding) => this.wrapped.WriteString(value, encoding);
 
@@ -661,5 +669,25 @@ namespace DotNetty.Buffers
         protected internal sealed override void Deallocate() => this.wrapped.Deallocate();
 
         public sealed override IByteBuffer Unwrap() => this.wrapped;
+
+        public sealed override IntPtr AddressOfPinnedMemory() => this.wrapped.AddressOfPinnedMemory();
+
+        public sealed override ref byte GetPinnableMemoryAddress() => ref this.wrapped.GetPinnableMemoryAddress();
+
+        public sealed override bool HasMemoryAddress => this.wrapped.HasMemoryAddress;
+
+        public sealed override bool IsWritable(int size) => this.wrapped.IsWritable(size);
+
+        public sealed override int MaxCapacity => this.wrapped.MaxCapacity;
+
+        public sealed override bool IsDirect => this.wrapped.IsDirect;
+
+        public override IByteBuffer ReadRetainedSlice(int length) => this.wrapped.ReadRetainedSlice(length);
+
+        public override IByteBuffer RetainedDuplicate() => this.wrapped.RetainedDuplicate();
+
+        public override IByteBuffer RetainedSlice() => this.wrapped.RetainedSlice();
+
+        public override IByteBuffer RetainedSlice(int index, int length) => this.wrapped.RetainedSlice(index, length);
     }
 }

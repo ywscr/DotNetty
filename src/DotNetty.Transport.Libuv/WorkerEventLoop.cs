@@ -3,9 +3,11 @@
 
 // ReSharper disable ConvertToAutoProperty
 // ReSharper disable ConvertToAutoPropertyWithPrivateSetter
+
 namespace DotNetty.Transport.Libuv
 {
     using System;
+    using System.Collections.Generic;
     using System.Diagnostics;
     using System.Diagnostics.Contracts;
     using System.Threading.Tasks;
@@ -20,7 +22,8 @@ namespace DotNetty.Transport.Libuv
         readonly string pipeName;
         Pipe pipe;
 
-        public WorkerEventLoop(WorkerEventLoopGroup parent) : base(parent, null)
+        public WorkerEventLoop(WorkerEventLoopGroup parent)
+            : base(parent, null)
         {
             Contract.Requires(parent != null);
 
@@ -104,9 +107,13 @@ namespace DotNetty.Transport.Libuv
             }
         }
 
+        public new IEventLoop GetNext() => (IEventLoop)base.GetNext();
+
         public Task RegisterAsync(IChannel channel) => channel.Unsafe.RegisterAsync(this);
 
         public new IEventLoopGroup Parent => (IEventLoopGroup)base.Parent;
+
+        IEnumerable<IEventLoop> IEventLoopGroup.Items => new[] { this };
 
         sealed class PipeConnect : ConnectRequest
         {
@@ -138,7 +145,7 @@ namespace DotNetty.Transport.Libuv
                 }
             }
 
-            void Connect() =>  NativeMethods.uv_pipe_connect(
+            void Connect() => NativeMethods.uv_pipe_connect(
                 this.Handle,
                 this.workerEventLoop.pipe.Handle,
                 this.workerEventLoop.pipeName,

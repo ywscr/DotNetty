@@ -45,6 +45,7 @@ namespace DotNetty.Common.Concurrency
         PreciseTimeSpan gracefulShutdownQuietPeriod;
         PreciseTimeSpan gracefulShutdownTimeout;
         readonly ISet<Action> shutdownHooks = new HashSet<Action>();
+        long progress;
 
         /// <summary>Creates a new instance of <see cref="SingleThreadEventExecutor"/>.</summary>
         public SingleThreadEventExecutor(string threadName, TimeSpan breakoutInterval)
@@ -85,6 +86,21 @@ namespace DotNetty.Common.Concurrency
         ///     Task Scheduler that will post work to this executor's queue.
         /// </summary>
         public TaskScheduler Scheduler => this.scheduler;
+
+        /// <summary>
+        ///     Allows to track whether executor is progressing through its backlog. Useful for diagnosing / mitigating stalls due to blocking calls in conjunction with IsBacklogEmpty property.
+        /// </summary>
+        public long Progress => Volatile.Read(ref this.progress);
+
+        /// <summary>
+        ///     Indicates whether executor's backlog is empty. Useful for diagnosing / mitigating stalls due to blocking calls in conjunction with Progress property.
+        /// </summary>
+        public bool IsBacklogEmpty => this.taskQueue.IsEmpty;
+
+        /// <summary>
+        ///     Gets length of backlog of tasks queued for immediate execution.
+        /// </summary>
+        public int BacklogLength => this.taskQueue.Count;
 
         void Loop()
         {
@@ -140,6 +156,8 @@ namespace DotNetty.Common.Concurrency
             }
         }
 
+        protected override IEnumerable<IEventExecutor> GetItems() => new[] { this };
+
         protected void WakeUp(bool inEventLoop)
         {
             if (!inEventLoop || (this.executionState == ST_SHUTTING_DOWN))
@@ -147,72 +165,75 @@ namespace DotNetty.Common.Concurrency
                 this.Execute(WAKEUP_TASK);
             }
         }
-        
-        /**
-          * Add a {@link Runnable} which will be executed on shutdown of this instance
-          */
-        public void AddShutdownHook(Action action) 
+
+        /// <summary>
+        /// Adds an <see cref="Action"/> which will be executed on shutdown of this instance.
+        /// </summary>
+        /// <param name="action">The <see cref="Action"/> to run on shutdown.</param>
+        public void AddShutdownHook(Action action)
         {
-            if (this.InEventLoop) 
+            if (this.InEventLoop)
             {
                 this.shutdownHooks.Add(action);
-            } 
+            }
             else
             {
                 this.Execute(() => this.shutdownHooks.Add(action));
             }
         }
 
-        /**
-         * Remove a previous added {@link Runnable} as a shutdown hook
-         */
-        public void RemoveShutdownHook(Action action) 
+        /// <summary>
+        /// Removes a previously added <see cref="Action"/> from the collection of <see cref="Action"/>s which will be
+        /// executed on shutdown of this instance.
+        /// </summary>
+        /// <param name="action">The <see cref="Action"/> to remove.</param>
+        public void RemoveShutdownHook(Action action)
         {
-            if (this.InEventLoop) 
+            if (this.InEventLoop)
             {
                 this.shutdownHooks.Remove(action);
-            } 
+            }
             else
             {
                 this.Execute(() => this.shutdownHooks.Remove(action));
             }
         }
 
-        bool RunShutdownHooks() 
+        bool RunShutdownHooks()
         {
             bool ran = false;
-            
+
             // Note shutdown hooks can add / remove shutdown hooks.
-            while (this.shutdownHooks.Count > 0) 
+            while (this.shutdownHooks.Count > 0)
             {
                 var copy = this.shutdownHooks.ToArray();
                 this.shutdownHooks.Clear();
 
                 for (var i = 0; i < copy.Length; i++)
                 {
-                    try 
+                    try
                     {
                         copy[i]();
-                    } 
-                    catch (Exception ex) 
+                    }
+                    catch (Exception ex)
                     {
                         Logger.Warn("Shutdown hook raised an exception.", ex);
-                    } 
-                    finally 
+                    }
+                    finally
                     {
                         ran = true;
                     }
                 }
             }
 
-            if (ran) 
+            if (ran)
             {
                 this.lastExecutionTime = PreciseTimeSpan.FromStart;
             }
 
             return ran;
         }
-        
+
 
         /// <inheritdoc cref="IEventExecutor"/>
         public override Task ShutdownGracefullyAsync(TimeSpan quietPeriod, TimeSpan timeout)
@@ -395,6 +416,7 @@ namespace DotNetty.Common.Concurrency
 
             while (true)
             {
+                Volatile.Write(ref this.progress, this.progress + 1); // volatile write is enough as this is the only thread ever writing
                 SafeExecute(task);
                 task = this.PollTask();
                 if (task == null)

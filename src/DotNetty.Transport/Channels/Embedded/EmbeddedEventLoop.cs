@@ -14,22 +14,23 @@ namespace DotNetty.Transport.Channels.Embedded
     {
         readonly Queue<IRunnable> tasks = new Queue<IRunnable>(2);
 
-        public IEventExecutor Executor => this;
+        public new IEventLoop GetNext() => this;
 
         public Task RegisterAsync(IChannel channel) => channel.Unsafe.RegisterAsync(this);
 
         public override bool IsShuttingDown => false;
 
-        public override Task TerminationCompletion
-        {
-            get { throw new NotSupportedException(); }
-        }
+        public override Task TerminationCompletion => throw new NotSupportedException();
 
         public override bool IsShutdown => false;
 
         public override bool IsTerminated => false;
 
         public new IEventLoopGroup Parent => (IEventLoopGroup)base.Parent;
+
+        protected override IEnumerable<IEventExecutor> GetItems() => new[] { this };
+
+        public new IEnumerable<IEventLoop> Items => new[] { this };
 
         public override bool IsInEventLoop(Thread thread) => true;
 
@@ -51,7 +52,7 @@ namespace DotNetty.Transport.Channels.Embedded
 
         internal void RunTasks()
         {
-            for (;;)
+            for (; ; )
             {
                 // have to perform an additional check since Queue<T> throws upon empty dequeue in .NET
                 if (this.tasks.Count == 0)
@@ -70,7 +71,7 @@ namespace DotNetty.Transport.Channels.Embedded
         internal PreciseTimeSpan RunScheduledTasks()
         {
             PreciseTimeSpan time = GetNanos();
-            for (;;)
+            for (; ; )
             {
                 IRunnable task = this.PollScheduledTask(time);
                 if (task == null)

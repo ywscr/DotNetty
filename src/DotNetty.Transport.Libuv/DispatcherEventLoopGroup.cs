@@ -2,14 +2,16 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 // ReSharper disable ConvertToAutoPropertyWhenPossible
+
 namespace DotNetty.Transport.Libuv
 {
     using System;
+    using System.Collections.Generic;
     using System.Threading.Tasks;
     using DotNetty.Common.Concurrency;
     using DotNetty.Transport.Channels;
 
-    public sealed class DispatcherEventLoopGroup : IEventLoopGroup
+    public sealed class DispatcherEventLoopGroup : AbstractEventExecutorGroup, IEventLoopGroup
     {
         readonly DispatcherEventLoop dispatcherEventLoop;
 
@@ -18,23 +20,27 @@ namespace DotNetty.Transport.Libuv
             this.dispatcherEventLoop = new DispatcherEventLoop(this);
         }
 
-        public Task TerminationCompletion => this.dispatcherEventLoop.TerminationCompletion;
+        public override bool IsShutdown => this.dispatcherEventLoop.IsShutdown;
+
+        public override bool IsTerminated => this.dispatcherEventLoop.IsTerminated;
+
+        public override bool IsShuttingDown => this.dispatcherEventLoop.IsShuttingDown;
+
+        public override Task TerminationCompletion => this.dispatcherEventLoop.TerminationCompletion;
 
         internal DispatcherEventLoop Dispatcher => this.dispatcherEventLoop;
 
-        IEventExecutor IEventExecutorGroup.GetNext() => this.GetNext();
+        protected override IEnumerable<IEventExecutor> GetItems() => new[] { this.dispatcherEventLoop };
 
-        public Task RegisterAsync(IChannel channel) => this.GetNext().RegisterAsync(channel);
+        public new IEnumerable<IEventLoop> Items => new[] { this.dispatcherEventLoop };
 
-        public IEventLoop GetNext() => this.dispatcherEventLoop;
+        IEventLoop IEventLoopGroup.GetNext() => (IEventLoop)this.GetNext();
 
-        public Task ShutdownGracefullyAsync()
-        {
-            this.dispatcherEventLoop.ShutdownGracefullyAsync();
-            return this.TerminationCompletion;
-        }
+        public override IEventExecutor GetNext() => this.dispatcherEventLoop;
 
-        public Task ShutdownGracefullyAsync(TimeSpan quietPeriod, TimeSpan timeout)
+        public Task RegisterAsync(IChannel channel) => ((IEventLoop)this.GetNext()).RegisterAsync(channel);
+
+        public override Task ShutdownGracefullyAsync(TimeSpan quietPeriod, TimeSpan timeout)
         {
             this.dispatcherEventLoop.ShutdownGracefullyAsync(quietPeriod, timeout);
             return this.TerminationCompletion;
